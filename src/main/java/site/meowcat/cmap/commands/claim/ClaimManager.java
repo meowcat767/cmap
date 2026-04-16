@@ -1,13 +1,16 @@
 package site.meowcat.cmap.commands.claim;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.saveddata.SavedData;
-import site.meowcat.cmap.commands.claim.ClaimData;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
 
-import java.util.UUID;
-
+@Mod.EventBusSubscriber
 public class ClaimManager {
 
     private static final String DATA_NAME = "claims";
@@ -16,7 +19,7 @@ public class ClaimManager {
         return level.getDataStorage().computeIfAbsent(
                 ClaimData::load,
                 ClaimData::new,
-                "claims"
+                DATA_NAME
         );
     }
 
@@ -26,7 +29,24 @@ public class ClaimManager {
 
         if (data.getClaims().containsKey(pos)) return false;
 
-        data.getClaims().put(pos, player.getUUID());
+        String defaultName = player.getName().getString() + "'s Land";
+
+        data.getClaims().put(pos, new Claim(player.getUUID(), defaultName));
+        data.setDirty();
+
+        return true;
+    }
+
+    public static boolean rename(ServerPlayer player, String newName) {
+        ClaimData data = get(player.serverLevel());
+        ChunkPos pos = new ChunkPos(player.blockPosition());
+
+        Claim claim = data.getClaims().get(pos);
+
+        if (claim == null) return false;
+        if (!claim.getOwner().equals(player.getUUID())) return false;
+
+        claim.setName(newName);
         data.setDirty();
 
         return true;
@@ -36,7 +56,8 @@ public class ClaimManager {
         ClaimData data = get(player.serverLevel());
         ChunkPos pos = new ChunkPos(player.blockPosition());
 
-        if (!player.getUUID().equals(data.getClaims().get(pos))) return false;
+        Claim claim = data.getClaims().get(pos);
+        if (claim == null || !player.getUUID().equals(claim.getOwner())) return false;
 
         data.getClaims().remove(pos);
         data.setDirty();
@@ -46,8 +67,52 @@ public class ClaimManager {
 
     public static boolean canModify(ServerPlayer player, ChunkPos pos) {
         ClaimData data = get(player.serverLevel());
-        UUID owner = data.getClaims().get(pos);
 
-        return owner == null || owner.equals(player.getUUID());
+        Claim claim = data.getClaims().get(pos);
+        return claim == null || claim.getOwner().equals(player.getUUID());
+    }
+
+    @SubscribeEvent
+    public static void onRegisterCommands(RegisterCommandsEvent event) {
+        event.getDispatcher().register(Commands.literal("claim")
+                .executes(ctx -> {
+                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                    if (claim(player)) {
+                        player.sendSystemMessage(Component.literal("Chunk claimed!"));
+                    } else {
+                        player.sendSystemMessage(Component.literal("This chunk is already claimed!"));
+                    }
+                    return 1;
+                })
+        );
+
+        event.getDispatcher().register(Commands.literal("unclaim")
+                .executes(ctx -> {
+                    ServerPlayer player = ctx.getSource().getPlayerOrException();
+                    if (unclaim(player)) {
+                        player.sendSystemMessage(Component.literal("Chunk unclaimed!"));
+                    } else {
+                        player.sendSystemMessage(Component.literal("You don't own this chunk!"));
+                    }
+                    return 1;
+                })
+        );
+
+        event.getDispatcher().register(Commands.literal("claimname")
+                .then(Commands.argument("name", StringArgumentType.greedyString())
+                        .executes(ctx -> {
+                            ServerPlayer player = ctx.getSource().getPlayerOrException();
+                            String name = StringArgumentType.getString(ctx, "name");
+
+                            if (rename(player, name)) {
+                                player.sendSystemMessage(Component.literal("Claim renamed!"));
+                            } else {
+                                player.sendSystemMessage(Component.literal("You don't own this claim!"));
+                            }
+
+                            return 1;
+                        })
+                )
+        );
     }
 }

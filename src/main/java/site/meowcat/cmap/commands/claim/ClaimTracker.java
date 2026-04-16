@@ -26,10 +26,7 @@ public class ClaimTracker {
         ChunkPos last = lastChunkMap.get(uuid);
 
         // only run when chunk changes
-        if (last == null) {
-            lastChunkMap.put(uuid, current);
-            return;
-        }
+        if (current.equals(last)) return;
 
         lastChunkMap.put(uuid, current);
 
@@ -39,25 +36,17 @@ public class ClaimTracker {
     private static void handleChunkChange(ServerPlayer player, ChunkPos pos) {
         ClaimData data = ClaimManager.get(player.serverLevel());
 
-        UUID owner = data.getClaims().get(pos);
+        Claim claim = data.getClaims().get(pos);
 
-        if (owner == null) {
+        if (claim == null) {
             sendActionBar(player, "Entering: Wilderness");
         } else {
-            String name = getPlayerName(player, owner);
-            sendActionBar(player, "Entering: " + name + "'s Land");
+            String name = claim.getName();
+            sendActionBar(player, "Entering: " + name);
         }
     }
 
     public static void sendActionBar(ServerPlayer player, String text) {
         player.displayClientMessage(Component.literal(text), true);
-    }
-
-    public static String getPlayerName(ServerPlayer player, UUID uuid) {
-        ServerPlayer target = player.server.getPlayerList().getPlayer(uuid);
-
-        if (target != null) return target.getDisplayName().getString();
-
-        return "Unknown"; // fallback (offline player)
     }
 }

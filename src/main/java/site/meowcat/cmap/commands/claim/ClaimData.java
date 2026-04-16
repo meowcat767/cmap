@@ -12,7 +12,7 @@ import java.util.UUID;
 
 public class ClaimData extends SavedData {
 
-    private final Map<ChunkPos, UUID> claims = new HashMap<>();
+    private final Map<ChunkPos, Claim> claims = new HashMap<>();
 
     public ClaimData() {}
 
@@ -20,13 +20,16 @@ public class ClaimData extends SavedData {
         ClaimData data = new ClaimData();
 
         ListTag list = tag.getList("claims", Tag.TAG_COMPOUND);
+
         for (Tag t : list) {
             CompoundTag entry = (CompoundTag) t;
+
             ChunkPos pos = new ChunkPos(entry.getInt("x"), entry.getInt("z"));
             UUID owner = entry.getUUID("owner");
-            data.claims.put(pos, owner);
-        }
+            String name = entry.getString("name");
 
+            data.claims.put(pos, new Claim(owner, name));
+        }
         return data;
     }
 
@@ -34,11 +37,14 @@ public class ClaimData extends SavedData {
     public CompoundTag save(CompoundTag tag) {
         ListTag list = new ListTag();
 
-        for (Map.Entry<ChunkPos, UUID> entry : claims.entrySet()) {
+        for (Map.Entry<ChunkPos, Claim> entry : claims.entrySet()) {
             CompoundTag t = new CompoundTag();
+
             t.putInt("x", entry.getKey().x);
             t.putInt("z", entry.getKey().z);
-            t.putUUID("owner", entry.getValue());
+            t.putUUID("owner", entry.getValue().getOwner());
+            t.putString("name", entry.getValue().getName());
+
             list.add(t);
         }
 
@@ -46,7 +52,7 @@ public class ClaimData extends SavedData {
         return tag;
     }
 
-    public Map<ChunkPos, UUID> getClaims() {
+    public Map<ChunkPos, Claim> getClaims() {
         return claims;
     }
 }
